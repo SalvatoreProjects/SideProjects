@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IB Diploma Quest - Enterprise Module</title>
+
+    <!-- Tech Stack: Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tech Stack: Vue 3 + Naive UI -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/naive-ui"></script>
+
+    <!-- Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:wght@700&display=swap');
+        /* Added for Logo */
+
+        /* Global Reset per Enterprise Standards */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+            background-color: #333;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #app {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #70c5ce;
+        }
+
+        .font-pixel {
+            font-family: 'Press Start 2P', cursive;
+        }
+
+        /* Naive UI Theme Overrides for Transparent HUD */
+        .n-card {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Animation Classes */
+        .notification-float {
+            animation: floatUp 1.5s forwards;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(20px) scale(0.5);
+                opacity: 0;
+            }
+
+            20% {
+                transform: translateY(0px) scale(1.2);
+                opacity: 1;
+            }
+
+            80% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(-50px) scale(1);
+                opacity: 0;
+            }
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- Naive UI Configuration -->
+        <n-config-provider :theme-overrides="themeOverrides">
+
+            <!-- Game Canvas Layer -->
+            <canvas ref="gameCanvasRef" class="game-canvas"></canvas>
+
+            <!-- UI Overlay Layer -->
+            <div class="absolute top-0 left-0 w-full h-full pointer-events-none flex flex-col justify-between p-4 z-10">
+
+                <!-- HUD (Top) - Compact Design -->
+                <div class="flex justify-between items-start pointer-events-auto w-full">
+                    <!-- Round Info -->
+                    <div
+                        class="bg-white/60 backdrop-blur-md rounded-xl px-4 py-2 border border-white/40 shadow-sm flex flex-col min-w-[120px]">
+                        <div class="text-[10px] text-gray-600 font-bold uppercase tracking-wider">Round</div>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-blue-800 font-bold text-lg font-pixel">{{ gameState.currentRound }}</span>
+                            <span class="text-gray-500 text-xs">/{{ config.maxRounds }}</span>
+                            <span
+                                class="text-[9px] text-gray-500 ml-2 bg-white/50 px-1 rounded border border-gray-200">{{
+                                gameState.difficulty }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Grade Info -->
+                    <div
+                        class="bg-white/60 backdrop-blur-md rounded-xl px-4 py-2 border border-white/40 shadow-sm flex flex-col text-right min-w-[120px]">
+                        <div class="text-[10px] text-gray-600 font-bold uppercase tracking-wider">IB Grade</div>
+                        <div class="flex items-baseline justify-end gap-1">
+                            <span class="text-blue-800 font-bold text-lg font-pixel">{{ gameState.ibGrade }}</span>
+                            <span class="text-gray-500 text-xs">/7</span>
+                        </div>
+                        <div class="text-[9px] text-gray-600 mt-0.5">Next: {{ nextPointReq }} bldgs</div>
+                    </div>
+                </div>
+
+                <!-- Notifications Area (Center) -->
+                <div
+                    class="absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full text-center pointer-events-none">
+                    <div v-for="note in notifications" :key="note.id"
+                        class="notification-float font-pixel text-2xl mb-2"
+                        :style="{ color: note.color, textShadow: '2px 2px 0 #000' }">
+                        {{ note.text }}
+                    </div>
+                </div>
+
+                <!-- Controls & Footer -->
+                <div class="w-full flex flex-col items-center gap-4 pointer-events-auto pb-6">
+                    <transition name="fade">
+                        <!-- Button with dynamic classes for Spacebar press -->
+                        <button v-if="isPlaying" :class="[
+                            'w-48 h-14 bg-[#003366] border-4 border-white text-white font-pixel text-lg shadow-xl rounded-lg transform transition-all duration-75 select-none',
+                            isButtonActive ? 'scale-90 bg-[#002244] shadow-none' : 'hover:scale-105 hover:shadow-2xl'
+                        ]" @mousedown.stop.prevent="handleFlap" @touchstart.stop.prevent="handleFlap">
+                            ManageBac
+                        </button>
+                    </transition>
+
+                    <div class="text-[10px] text-white/80 text-center transition-all duration-500 font-light"
+                        :class="{ 'opacity-50 scale-75': isPlaying }">
+                        Designed by Salvatore @ Scholar Hills（学霸山丘）
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODALS (Naive UI Implementation) -->
+
+            <!-- Intro Screen -->
+            <n-modal :show="screenState === 'intro'" :mask-closable="false">
+                <n-card class="w-[90%] max-w-md text-center" title="IB Diploma Quest" :bordered="false">
+                    <template #header-extra>
+                        <div class="text-xs text-gray-400">v2.1</div>
+                    </template>
+                    <div class="flex flex-col gap-4 py-4">
+                        <p class="text-gray-600 text-sm">
+                            Welcome, Candidate.<br>
+                            Select your academic pathway.
+                        </p>
+
+                        <div class="flex flex-col gap-3">
+                            <n-button type="success" size="large" block strong secondary @click="startGame('SL')">
+                                Standard Level (SL)
+                            </n-button>
+                            <n-button type="error" size="large" block strong secondary @click="startGame('HL')">
+                                Higher Level (HL)
+                            </n-button>
+                        </div>
+                    </div>
+                </n-card>
+            </n-modal>
+
+            <!-- Countdown Overlay -->
+            <div v-if="screenState === 'countdown'"
+                class="absolute inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+                <div
+                    class="font-pixel text-8xl text-white drop-shadow-[0_4px_0_#006aab] animate-[popIn_0.5s_cubic-bezier(0.175,0.885,0.32,1.275)]">
+                    {{ countdownVal }}
+                </div>
+            </div>
+
+            <!-- Game Over Modal -->
+            <n-modal :show="screenState === 'gameover'" :mask-closable="false">
+                <n-card class="w-[90%] max-w-md text-center border-t-4 border-red-500">
+                    <h2 class="text-2xl font-bold text-red-600 mb-2">ACADEMIC PROBATION</h2>
+                    <div class="py-4">
+                        <p class="text-gray-500 mb-4 text-sm">{{ gameOverMsg }}</p>
+                        <n-statistic label="Round Grade Reset" class="mb-4">
+                            <span class="text-5xl font-bold font-pixel text-gray-800">0</span>
+                        </n-statistic>
+                        <n-alert type="warning" :show-icon="false" class="mb-6 text-xs">
+                            Don't give up! Retake Round {{ gameState.currentRound }}.
+                        </n-alert>
+
+                        <n-button type="primary" block size="large" @click="restartCurrentRound">
+                            Retake Round
+                        </n-button>
+                    </div>
+                </n-card>
+            </n-modal>
+
+            <!-- Mercy Prompt (HL -> SL) -->
+            <n-modal :show="screenState === 'mercy_prompt'" :mask-closable="false">
+                <n-card class="w-[90%] max-w-md text-center border-t-4 border-yellow-500">
+                    <h2 class="text-xl font-bold text-yellow-600 mb-2">DIFFICULTY ADJUSTMENT</h2>
+                    <div class="py-4">
+                        <p class="text-gray-600 mb-4 text-sm">
+                            Performance Review: 3 consecutive fails in HL.
+                        </p>
+                        <p class="text-sm font-bold mb-6 text-blue-900 bg-blue-50 p-2 rounded">
+                            We advise you to lower the difficulty.
+                        </p>
+
+                        <div class="flex gap-3 mb-4">
+                            <n-button type="warning" ghost block @click="confirmDowngrade">Lower to SL</n-button>
+                            <n-button type="default" ghost block @click="denyDowngrade">Stay in HL</n-button>
+                        </div>
+                        <div class="text-xs text-gray-400">Auto-dismiss in {{ choiceTimer }}s</div>
+                    </div>
+                </n-card>
+            </n-modal>
+
+            <!-- Restore Prompt (SL -> HL) -->
+            <n-modal :show="screenState === 'restore_prompt'" :mask-closable="false">
+                <n-card class="w-[90%] max-w-md text-center border-t-4 border-blue-500">
+                    <h2 class="text-xl font-bold text-blue-600 mb-2">ACADEMIC EXCELLENCE</h2>
+                    <div class="py-4">
+                        <p class="text-gray-600 mb-4 text-sm">
+                            Performance Review: 2 consecutive wins in SL.
+                        </p>
+                        <p class="text-sm font-bold mb-6 text-blue-900 bg-blue-50 p-2 rounded">
+                            We advise you to select a higher difficulty.
+                        </p>
+
+                        <div class="flex gap-3 mb-4">
+                            <n-button type="info" ghost block @click="confirmRestore">Select HL</n-button>
+                            <n-button type="default" ghost block @click="denyRestore">Stay in SL</n-button>
+                        </div>
+                        <div class="text-xs text-gray-400">Auto-dismiss in {{ choiceTimer }}s</div>
+                    </div>
+                </n-card>
+            </n-modal>
+
+            <!-- Win Round -->
+            <n-modal :show="screenState === 'win'" :mask-closable="false">
+                <n-card class="w-[90%] max-w-md text-center border-t-4 border-yellow-400">
+                    <h2 class="text-2xl font-bold text-yellow-600 mb-2">GRADE 7 ACHIEVED</h2>
+                    <div class="py-4">
+                        <p class="text-gray-600 mb-6 text-sm">{{ winMsg }}</p>
+                        <n-button type="primary" block size="large" @click="nextRound" :disabled="!canProceed">
+                            <span v-if="!canProceed">Next Subject in {{ 3 - winTimer }}s</span>
+                            <span v-else>Proceed to Next Subject</span>
+                        </n-button>
+                    </div>
+                </n-card>
+            </n-modal>
+
+            <!-- Grand Win -->
+            <n-modal :show="screenState === 'grandwin'" :mask-closable="false">
+                <n-card
+                    class="w-[90%] max-w-md text-center border-t-4 border-blue-600 bg-gradient-to-b from-white to-blue-50">
+                    <div class="text-6xl mb-4">🎓</div>
+                    <h2 class="text-3xl font-bold text-blue-800 mb-2">DIPLOMA AWARDED</h2>
+                    <p class="text-gray-600 mb-6 text-sm">45 Points. Perfect Score.</p>
+                    <div class="text-xs text-gray-400 italic mb-6">"Education for a better world."</div>
+                    <n-button type="info" block size="large" @click="resetFullGame">
+                        Start New Cohort
+                    </n-button>
+                </n-card>
+            </n-modal>
+
+        </n-config-provider>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
+        const { useMessage } = naive;
+
+        /* * =========================================================================
+         * SECTION: UTILS & SECURITY (Matches frontend/src/assets/functions/)
+         * =========================================================================
+         */
+
+        const CryptoUtils = {
+            async encrypt(payload) {
+                return btoa(JSON.stringify(payload));
+            },
+
+            generateHMAC(payload) {
+                return "hmac_sig_" + Date.now();
+            }
+        };
+
+        /* * =========================================================================
+         * SECTION: API SERVICE LAYER (Matches frontend/src/api/Academy/)
+         * =========================================================================
+         */
+
+        const AcademyService = {
+            async submitScore(data) {
+                const encrypted = await CryptoUtils.encrypt(data);
+                const signature = CryptoUtils.generateHMAC(encrypted);
+                // Simulating API call pattern
+                // Headers: X-HMAC-Signature
+                return true;
+            }
+        };
+
+        /* * =========================================================================
+         * SECTION: GAME COMPONENT (Matches frontend/src/components/Academy/Game.vue)
+         * =========================================================================
+         */
+        const App = {
+            setup() {
+                // --- 1. STATE DEFINITIONS ---
+                const gameCanvasRef = ref(null);
+                const ctx = ref(null);
+
+                // UI Refs
+                const screenState = ref('intro');
+                const countdownVal = ref(3);
+                const notifications = ref([]);
+                const gameOverMsg = ref("");
+                const winMsg = ref("");
+                const winTimer = ref(0);
+
+                // Button Animation
+                const isButtonActive = ref(false);
+
+                // Choice Timer
+                const choiceTimer = ref(5);
+                let choiceInterval = null;
+
+                const gameState = reactive({
+                    difficulty: 'SL',
+                    currentRound: 1,
+                    ibGrade: 0,
+                    tubesCleared: 0,
+                    consecutiveFails: 0,
+                    slWinStreak: 0
+                });
+
+                const powerups = reactive({
+                    invincible: 0,
+                    shrunk: 0,
+                    enlarged: 0,
+                    cool: 0
+                });
+
+                const config = {
+                    maxRounds: 7,
+                    speedMultiplier: 1.0,
+                    gapSize: 280
+                };
+
+                // Physics Constants (Logical Units - 1080p Basis)
+                const LOGICAL_HEIGHT = 1080;
+                const PHYSICS = {
+                    gravity: 0.20, // Lowered for easier play (was 0.23)
+                    jump: -5.5,
+                    birdRadius: 22,
+                    groundHeight: 120,
+                    baseSpeed: 2.2
+                };
+
+                // Assets
+                const ibCourses = ["Math AA HL", "Math AI SL", "Physics HL", "Chem SL", "Bio HL", "Econ HL", "Hist SL", "Eng A Lit", "TOK", "EE", "CAS"];
+                const messages = {
+                    fail: ["Time management needed!", "Review your notes.", "Academic honesty warning!", "Citation missing."],
+                    win: ["Academic Weapon!", "Scholarship material!", "CAS Approved.", "Ivy League bound!"]
+                };
+
+                // --- 2. ENGINE VARIABLES ---
+                let bird = { y: 500, velocity: 0, rotation: 0 };
+                let buildings = [];
+                let items = [];
+                let groundOffset = 0;
+                let frames = 0;
+                let animId = null;
+                let renderScale = 1.0;
+                let audioCtx = null;
+                let bgmInterval = null;
+
+                // --- 3. METHODS ---
+
+                const isPlaying = computed(() => screenState.value === 'playing');
+                const canProceed = computed(() => winTimer.value >= 3);
+                const nextPointReq = computed(() => {
+                    let base = 3 + (gameState.currentRound - 1) * 2;
+                    if (gameState.difficulty === 'HL') base += 1;
+                    return base - (gameState.tubesCleared % base);
+                });
+
+                // Audio
+                const initAudio = () => {
+                    if (!audioCtx) {
+                        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { }
+                    }
+                    if (audioCtx?.state === 'suspended') audioCtx.resume();
+                };
+
+                const playTone = (freq, type, duration) => {
+                    if (!audioCtx) return;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = type;
+                    osc.frequency.value = freq;
+                    gain.gain.value = 0.05;
+                    osc.start();
+                    const stopTime = audioCtx.currentTime + duration;
+                    if (isFinite(stopTime)) osc.stop(stopTime);
+                };
+
+                const playSFX = (key) => {
+                    if (key === 'jump') playTone(400, 'sine', 0.1);
+                    if (key === 'score') playTone(800, 'square', 0.1);
+                    if (key === 'crash') playTone(150, 'sawtooth', 0.3);
+                    if (key === 'powerup') playTone(1200, 'sine', 0.2);
+                    if (key === 'gradeUp') [523, 659, 783].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.1), i * 100));
+                    if (key === 'bad') playTone(200, 'sawtooth', 0.2);
+                };
+
+                const startBGM = (mode) => {
+                    if (bgmInterval) clearInterval(bgmInterval);
+                    let notes = mode === 'intro' ? [392, 523, 659, 783] : [261, 329, 392, 523];
+                    let idx = 0;
+                    let speed = mode === 'intro' ? 600 : Math.max(150, 500 - (gameState.currentRound * 40));
+                    bgmInterval = setInterval(() => {
+                        if (mode !== 'intro' && screenState.value !== 'playing') return;
+                        playTone(notes[idx], mode === 'intro' ? 'triangle' : 'square', 0.1);
+                        idx = (idx + 1) % notes.length;
+                    }, speed);
+                };
+
+                // Game Logic
+                const resize = () => {
+                    if (gameCanvasRef.value) {
+                        gameCanvasRef.value.width = window.innerWidth;
+                        gameCanvasRef.value.height = window.innerHeight;
+                        renderScale = window.innerHeight / LOGICAL_HEIGHT;
+                    }
+                };
+
+                const spawnBuilding = () => {
+                    const minH = 100;
+                    const gap = Math.max(200, config.gapSize - ((gameState.currentRound - 1) * 20));
+                    const available = LOGICAL_HEIGHT - PHYSICS.groundHeight;
+                    const maxPipe = available - gap - minH;
+                    const topH = Math.floor(Math.random() * (maxPipe - minH + 1) + minH);
+
+                    const type = ['library', 'gym', 'lab'][Math.floor(Math.random() * 3)];
+
+                    buildings.push({
+                        x: window.innerWidth / renderScale,
+                        top: topH,
+                        bottom: available - gap - topH,
+                        w: 80,
+                        passed: false,
+                        course: ibCourses[Math.floor(Math.random() * ibCourses.length)],
+                        type: type
+                    });
+
+                    if (Math.random() < 0.3) {
+                        const isTop = Math.random() > 0.5;
+                        const itemY = isTop ? topH + 40 : topH + gap - 40;
+                        const r = Math.random();
+                        let type = 'cap';
+                        if (r > 0.9) type = 'diploma';
+                        else if (r > 0.8) type = 'star';
+                        else if (r > 0.7) type = 'potion';
+                        else if (r > 0.55) type = 'growth';
+                        else if (r > 0.4) type = 'minus';
+
+                        items.push({
+                            x: (window.innerWidth / renderScale) + 40,
+                            y: itemY,
+                            type: type
+                        });
+                    }
+                };
+
+                const doGameOver = () => {
+                    screenState.value = 'gameover';
+                    playSFX('crash');
+                    gameOverMsg.value = messages.fail[Math.floor(Math.random() * messages.fail.length)];
+
+                    gameState.consecutiveFails++;
+                    gameState.slWinStreak = 0;
+
+                    if (gameState.difficulty === 'HL' && gameState.consecutiveFails >= 3) {
+                        screenState.value = 'mercy_prompt';
+                        startChoiceTimer(denyDowngrade);
+                    }
+
+                    AcademyService.submitScore(gameState);
+                };
+
+                const doWinRound = () => {
+                    screenState.value = 'win';
+                    winMsg.value = messages.win[Math.floor(Math.random() * messages.win.length)];
+                    winTimer.value = 0;
+
+                    if (gameState.difficulty === 'SL') {
+                        gameState.slWinStreak++;
+                    }
+                    gameState.consecutiveFails = 0;
+
+                    const t = setInterval(() => { winTimer.value++; if (winTimer.value >= 3) clearInterval(t); }, 1000);
+                };
+
+                const checkGrade = () => {
+                    const req = 3 + (gameState.currentRound - 1) * 2 + (gameState.difficulty === 'HL' ? 2 : 0);
+                    const prev = gameState.ibGrade;
+                    gameState.ibGrade = Math.floor(gameState.tubesCleared / req);
+
+                    if (gameState.ibGrade > prev) {
+                        playSFX('gradeUp');
+                        showNotification(`+1 GRADE!`, '#FFD700');
+                    } else {
+                        playSFX('score');
+                    }
+
+                    if (gameState.ibGrade >= 7) doWinRound();
+                };
+
+                const showNotification = (text, color) => {
+                    const id = Date.now();
+                    notifications.value.push({ id, text, color });
+                    setTimeout(() => { notifications.value = notifications.value.filter(n => n.id !== id); }, 1500);
+                };
+
+                const applyItem = (type) => {
+                    if (['growth', 'minus'].includes(type)) playSFX('bad'); else playSFX('powerup');
+                    if (type === 'star') { powerups.invincible = 300; showNotification('INVINCIBLE!', 'gold'); }
+                    if (type === 'diploma') { gameState.ibGrade++; showNotification('+1 GRADE!', '#fff'); if (gameState.ibGrade >= 7) doWinRound(); }
+                    if (type === 'potion') { powerups.shrunk = 300; powerups.enlarged = 0; showNotification('MINI BIRD', 'blue'); }
+                    if (type === 'growth') { powerups.enlarged = 300; powerups.shrunk = 0; showNotification('EXPANDED!', 'red'); }
+                    if (type === 'minus') { gameState.ibGrade = Math.max(0, gameState.ibGrade - 1); showNotification('-1 GRADE', 'red'); }
+                    if (type === 'cap') { powerups.cool = 300; showNotification('STYLISH!', '#333'); }
+                };
+
+                const update = () => {
+                    if (screenState.value !== 'playing') return;
+
+                    // Physics update
+                    bird.velocity += PHYSICS.gravity;
+                    bird.y += bird.velocity;
+
+                    const groundY = LOGICAL_HEIGHT - PHYSICS.groundHeight;
+                    if (bird.y + PHYSICS.birdRadius >= groundY) {
+                        bird.y = groundY - PHYSICS.birdRadius;
+                        if (powerups.invincible <= 0) doGameOver();
+                    }
+
+                    if (bird.y - PHYSICS.birdRadius < 0) {
+                        bird.y = PHYSICS.birdRadius;
+                        bird.velocity = 0;
+                    }
+
+                    bird.rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (bird.velocity * 0.1)));
+
+                    const speed = (PHYSICS.baseSpeed + (gameState.currentRound * 0.5)) * config.speedMultiplier;
+                    groundOffset = (groundOffset + speed) % 40;
+
+                    if (frames % Math.floor(400 / speed) === 0) spawnBuilding();
+
+                    buildings.forEach((p, i) => {
+                        p.x -= speed;
+                        const birdR = powerups.shrunk ? PHYSICS.birdRadius * 0.6 : (powerups.enlarged ? PHYSICS.birdRadius * 1.4 : PHYSICS.birdRadius);
+
+                        if (
+                            bird.x + birdR > p.x && bird.x - birdR < p.x + p.w &&
+                            (bird.y - birdR < p.top || bird.y + birdR > groundY - p.bottom)
+                        ) {
+                            if (powerups.invincible <= 0) doGameOver();
+                        }
+
+                        if (p.x + p.w < bird.x && !p.passed) {
+                            p.passed = true;
+                            gameState.tubesCleared++;
+                            checkGrade();
+                        }
+                    });
+
+                    if (buildings.length && buildings[0].x < -100) buildings.shift();
+
+                    items.forEach((item, i) => {
+                        item.x -= speed;
+                        const dx = item.x - bird.x;
+                        const dy = item.y - bird.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 40) {
+                            applyItem(item.type);
+                            items.splice(i, 1);
+                        }
+                    });
+
+                    if (powerups.invincible > 0) powerups.invincible--;
+                    if (powerups.shrunk > 0) powerups.shrunk--;
+                    if (powerups.enlarged > 0) powerups.enlarged--;
+                    if (powerups.cool > 0) powerups.cool--;
+
+                    frames++;
+                };
+
+                const draw = () => {
+                    if (!ctx.value) return;
+                    const c = ctx.value;
+                    const W = gameCanvasRef.value.width;
+                    const H = gameCanvasRef.value.height;
+
+                    c.clearRect(0, 0, W, H);
+                    c.save();
+                    c.scale(renderScale, renderScale);
+
+                    // Background
+                    c.fillStyle = '#70c5ce';
+                    c.fillRect(0, 0, W / renderScale, LOGICAL_HEIGHT);
+                    c.fillStyle = 'rgba(255,255,255,0.6)';
+                    for (let i = 0; i < 5; i++) {
+                        let cx = ((frames * 0.5) + (i * 400)) % (2000) - 100;
+                        c.beginPath(); c.arc(cx, 200 + (i * 50), 40, 0, Math.PI * 2); c.fill();
+                    }
+
+                    // Buildings
+                    buildings.forEach(p => {
+                        let color = p.type === 'gym' ? '#778899' : (p.type === 'lab' ? '#556B2F' : '#8B4513');
+                        c.fillStyle = color; c.strokeStyle = '#222'; c.lineWidth = 3;
+                        c.fillRect(p.x, 0, p.w, p.top); c.strokeRect(p.x, 0, p.w, p.top);
+                        c.fillStyle = '#444'; c.fillRect(p.x - 5, p.top - 20, p.w + 10, 20);
+
+                        if (p.type === 'library') { c.fillStyle = 'rgba(255,255,255,0.3)'; c.fillRect(p.x + 15, 0, 10, p.top - 20); c.fillRect(p.x + p.w - 25, 0, 10, p.top - 20); }
+                        if (p.type === 'gym') { c.fillStyle = '#B0C4DE'; c.fillRect(p.x + 10, p.top - 60, p.w - 20, 40); c.strokeRect(p.x + 10, p.top - 60, p.w - 20, 40); }
+
+                        c.fillStyle = 'white'; c.font = '14px "Press Start 2P"'; c.textAlign = 'center'; c.strokeStyle = 'black'; c.lineWidth = 3;
+                        c.strokeText(p.course, p.x + p.w / 2, p.top - 40); c.fillText(p.course, p.x + p.w / 2, p.top - 40);
+
+                        const groundY = LOGICAL_HEIGHT - PHYSICS.groundHeight;
+                        const botY = groundY - p.bottom;
+                        c.fillStyle = color; c.strokeStyle = '#222';
+                        c.fillRect(p.x, botY, p.w, p.bottom); c.strokeRect(p.x, botY, p.w, p.bottom);
+                        c.fillStyle = '#444'; c.fillRect(p.x - 5, botY, p.w + 10, 20);
+                        c.fillStyle = 'white'; c.strokeText(p.course, p.x + p.w / 2, botY + 60); c.fillText(p.course, p.x + p.w / 2, botY + 60);
+                    });
+
+                    // Ground
+                    const gY = LOGICAL_HEIGHT - PHYSICS.groundHeight;
+                    c.fillStyle = '#ded895'; c.fillRect(0, gY, W / renderScale, PHYSICS.groundHeight);
+                    c.fillStyle = '#73bf2e'; c.fillRect(0, gY, W / renderScale, 20);
+                    c.strokeStyle = '#558c22'; c.beginPath(); c.moveTo(0, gY + 20); c.lineTo(W / renderScale, gY + 20); c.stroke();
+                    c.strokeStyle = '#64a826'; c.lineWidth = 3; c.beginPath();
+                    for (let i = -20; i < W / renderScale; i += 30) {
+                        c.moveTo(i - groundOffset, gY); c.lineTo(i + 15 - groundOffset, gY + 20);
+                    }
+                    c.stroke();
+
+                    // Items
+                    items.forEach(item => {
+                        c.save(); c.translate(item.x, item.y + Math.sin(frames * 0.1) * 5);
+                        if (item.type === 'star') { c.fillStyle = 'gold'; c.beginPath(); c.arc(0, 0, 15, 0, Math.PI * 2); c.fill(); }
+                        else if (item.type === 'diploma') { c.fillStyle = '#FFF8DC'; c.fillRect(-15, -10, 30, 20); c.fillStyle = 'red'; c.fillRect(-2, -10, 4, 20); }
+                        else if (item.type === 'potion') { c.fillStyle = 'blue'; c.beginPath(); c.arc(0, 5, 10, 0, Math.PI * 2); c.fill(); c.fillRect(-4, -15, 8, 10); }
+                        else if (item.type === 'growth') { c.fillStyle = 'red'; c.beginPath(); c.arc(0, 5, 12, 0, Math.PI * 2); c.fill(); c.fillStyle = 'white'; c.fillText('!', -5, 5); }
+                        else if (item.type === 'minus') { c.fillStyle = 'white'; c.fillRect(-12, -15, 24, 30); c.fillStyle = 'red'; c.fillText('F', 0, 5); }
+                        else { c.fillStyle = '#222'; c.fillRect(-15, 0, 30, 5); c.beginPath(); c.moveTo(0, -10); c.lineTo(20, 0); c.lineTo(-20, 0); c.fill(); }
+                        c.restore();
+                    });
+
+                    // Bird (Proper IB Logo)
+                    c.save();
+                    c.translate(bird.x, bird.y);
+                    c.rotate(bird.rotation);
+
+                    let r = PHYSICS.birdRadius;
+                    if (powerups.shrunk > 0) r *= 0.6;
+                    if (powerups.enlarged > 0) r *= 1.4;
+
+                    // Blue Disc
+                    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fillStyle = '#006aab'; c.fill(); c.strokeStyle = 'white'; c.lineWidth = 2; c.stroke();
+
+                    const s = r / 25; // Scale unit based on 25px ref
+
+                    // White "ib" text
+                    // We draw manual shapes to ensure it looks like the logo, not just font
+                    c.fillStyle = 'white';
+
+                    // 'i'
+                    // Dot
+                    c.beginPath(); c.arc(-8 * s, -10 * s, 4 * s, 0, Math.PI * 2); c.fill();
+                    // Stem - Serif style
+                    c.beginPath();
+                    c.moveTo(-10 * s, -2 * s); // Top left
+                    c.lineTo(-6 * s, -2 * s); // Top right
+                    c.lineTo(-6 * s, 15 * s); // Bottom right
+                    c.lineTo(-10 * s, 15 * s); // Bottom left
+                    c.fill();
+                    // Top serif
+                    c.beginPath(); c.moveTo(-12 * s, -2 * s); c.lineTo(-6 * s, -2 * s); c.lineTo(-6 * s, 2 * s); c.lineTo(-10 * s, 2 * s); c.fill();
+
+                    // 'b'
+                    // Stem
+                    c.beginPath();
+                    c.moveTo(-2 * s, -12 * s); c.lineTo(2 * s, -12 * s);
+                    c.lineTo(2 * s, 15 * s); c.lineTo(-2 * s, 15 * s); c.fill();
+                    // Top serif
+                    c.beginPath(); c.moveTo(-4 * s, -12 * s); c.lineTo(2 * s, -12 * s); c.lineTo(2 * s, -8 * s); c.lineTo(-2 * s, -8 * s); c.fill();
+
+                    // Loop
+                    c.beginPath();
+                    c.moveTo(2 * s, 0);
+                    c.bezierCurveTo(14 * s, 0, 14 * s, 15 * s, 2 * s, 15 * s); // Outer curve
+                    c.lineTo(2 * s, 10 * s); // Inner bottom
+                    c.bezierCurveTo(9 * s, 10 * s, 9 * s, 5 * s, 2 * s, 5 * s); // Inner top
+                    c.fill();
+
+                    // Wings (Flapping)
+                    let wingY = (frames % 15 < 8) ? -8 : 2;
+                    c.strokeStyle = '#eee'; c.lineWidth = 2; c.lineCap = 'round';
+
+                    // Front Wing
+                    c.beginPath();
+                    c.moveTo(5 * s, -5 * s);
+                    c.quadraticCurveTo(15 * s, wingY * s - 10 * s, 20 * s, wingY * s);
+                    c.quadraticCurveTo(10 * s, wingY * s + 5 * s, 5 * s, 0);
+                    c.fillStyle = 'rgba(255,255,255,0.8)'; c.fill(); c.stroke();
+
+                    // Back Wing (offset)
+                    c.save(); c.translate(-5 * s, -2 * s);
+                    c.beginPath();
+                    c.moveTo(5 * s, -5 * s);
+                    c.quadraticCurveTo(15 * s, wingY * s - 12 * s, 18 * s, wingY * s - 2 * s);
+                    c.quadraticCurveTo(10 * s, wingY * s + 3 * s, 5 * s, 0);
+                    c.fillStyle = 'rgba(230,230,230,0.8)'; c.fill(); c.stroke();
+                    c.restore();
+
+                    if (powerups.cool > 0) {
+                        c.save(); c.rotate(-0.2); c.translate(0, -r);
+                        c.fillStyle = '#222'; c.fillRect(-15, -5, 30, 5);
+                        c.beginPath(); c.moveTo(0, -5); c.lineTo(20, 0); c.lineTo(-20, 0); c.fill();
+                        c.strokeStyle = 'gold'; c.beginPath(); c.moveTo(0, 0); c.lineTo(10, 10); c.stroke();
+                        c.restore();
+                    }
+
+                    c.restore(); // Undo rotation
+                    c.save(); c.translate(bird.x, bird.y);
+                    c.fillStyle = 'white'; c.font = '12px "Press Start 2P"'; c.textAlign = 'center'; c.shadowColor = 'black'; c.shadowBlur = 4;
+                    c.fillText("Bac", 0, -r - 10);
+                    c.restore();
+
+                    if (powerups.invincible > 0) {
+                        c.save(); c.translate(bird.x, bird.y);
+                        c.strokeStyle = 'gold'; c.lineWidth = 3; c.globalAlpha = 0.6;
+                        c.beginPath(); c.arc(0, 0, r + 5, 0, Math.PI * 2); c.stroke();
+                        c.restore();
+                    }
+
+                    c.restore(); // Pop scale
+                };
+
+                const gameLoop = () => {
+                    update();
+                    draw();
+                    animId = requestAnimationFrame(gameLoop);
+                };
+
+                const handleFlap = () => {
+                    if (screenState.value === 'playing') {
+                        bird.velocity = PHYSICS.jump;
+                        playSFX('jump');
+                        triggerButtonAnim();
+                    }
+                };
+
+                const triggerButtonAnim = () => {
+                    isButtonActive.value = true;
+                    setTimeout(() => isButtonActive.value = false, 100);
+                };
+
+                const handleKeyboardFlap = () => {
+                    if (screenState.value === 'playing') {
+                        handleFlap();
+                    }
+                };
+
+                const resetEntities = () => {
+                    bird.y = LOGICAL_HEIGHT / 2;
+                    bird.velocity = 0;
+                    bird.rotation = 0;
+                    bird.x = 200;
+                    buildings = [];
+                    items = [];
+                    Object.keys(powerups).forEach(k => powerups[k] = 0);
+                };
+
+                const startGame = (diff) => {
+                    initAudio();
+                    gameState.difficulty = diff;
+                    // Easier Difficulty Settings
+                    config.speedMultiplier = diff === 'SL' ? 0.9 : 1.1; // Reduced speed (was 1.0/1.2)
+                    config.gapSize = diff === 'SL' ? 290 : 250; // Increased gap (was 260/220)
+
+                    gameState.currentRound = 1; gameState.ibGrade = 0; gameState.tubesCleared = 0; gameState.consecutiveFails = 0; gameState.slWinStreak = 0;
+
+                    screenState.value = 'countdown';
+                    countdownVal.value = 3;
+                    let t = setInterval(() => {
+                        countdownVal.value--;
+                        if (countdownVal.value <= 0) {
+                            clearInterval(t);
+                            screenState.value = 'playing';
+                            resetEntities();
+                            startBGM('game');
+                            bird.velocity = PHYSICS.jump;
+                        }
+                    }, 800);
+                };
+
+                const nextRound = () => {
+                    if (gameState.currentRound >= config.maxRounds) {
+                        screenState.value = 'grandwin';
+                    } else {
+                        if (gameState.difficulty === 'SL' && gameState.slWinStreak >= 2) {
+                            screenState.value = 'restore_prompt';
+                            startChoiceTimer(denyRestore);
+                            return;
+                        }
+                        proceedNextRound();
+                    }
+                };
+
+                const proceedNextRound = () => {
+                    gameState.currentRound++;
+                    config.speedMultiplier += 0.1;
+                    config.gapSize = Math.max(180, config.gapSize - 10);
+                    gameState.ibGrade = 0; gameState.tubesCleared = 0;
+
+                    screenState.value = 'countdown';
+                    countdownVal.value = 3;
+                    let t = setInterval(() => {
+                        countdownVal.value--;
+                        if (countdownVal.value <= 0) {
+                            clearInterval(t);
+                            screenState.value = 'playing';
+                            resetEntities();
+                            bird.velocity = PHYSICS.jump;
+                        }
+                    }, 800);
+                };
+
+                // Restart CURRENT round logic
+                const restartCurrentRound = () => {
+                    gameState.ibGrade = 0;
+                    gameState.tubesCleared = 0;
+                    // DO NOT reset round counter
+
+                    screenState.value = 'countdown';
+                    countdownVal.value = 3;
+                    let t = setInterval(() => {
+                        countdownVal.value--;
+                        if (countdownVal.value <= 0) {
+                            clearInterval(t);
+                            screenState.value = 'playing';
+                            resetEntities();
+                            bird.velocity = PHYSICS.jump;
+                        }
+                    }, 800);
+                };
+
+                const retryRound = () => {
+                    restartCurrentRound();
+                };
+
+                const startChoiceTimer = (defaultAction) => {
+                    choiceTimer.value = 5;
+                    if (choiceInterval) clearInterval(choiceInterval);
+                    choiceInterval = setInterval(() => {
+                        choiceTimer.value--;
+                        if (choiceTimer.value <= 0) {
+                            clearInterval(choiceInterval);
+                            defaultAction();
+                        }
+                    }, 1000);
+                };
+
+                const confirmDowngrade = () => {
+                    clearInterval(choiceInterval);
+                    gameState.difficulty = 'SL';
+                    gameState.consecutiveFails = 0;
+                    gameState.slWinStreak = 0;
+                    config.speedMultiplier = 0.9; // Reset to easier SL speed
+                    config.gapSize = 290;
+                    restartCurrentRound();
+                };
+
+                const denyDowngrade = () => {
+                    clearInterval(choiceInterval);
+                    restartCurrentRound();
+                };
+
+                const dropToSL = () => {
+                    confirmDowngrade();
+                };
+
+                const confirmRestore = () => {
+                    clearInterval(choiceInterval);
+                    gameState.difficulty = 'HL';
+                    gameState.consecutiveFails = 0;
+                    gameState.slWinStreak = 0;
+                    config.speedMultiplier = 1.1 + (gameState.currentRound * 0.1);
+                    config.gapSize = 250 - (gameState.currentRound * 10);
+                    proceedNextRound();
+                };
+
+                const denyRestore = () => {
+                    clearInterval(choiceInterval);
+                    gameState.slWinStreak = 0;
+                    proceedNextRound();
+                };
+
+                const resetFullGame = () => {
+                    screenState.value = 'intro';
+                    startBGM('intro');
+                };
+
+                onMounted(() => {
+                    if (gameCanvasRef.value) ctx.value = gameCanvasRef.value.getContext('2d');
+                    resize();
+                    window.addEventListener('resize', resize);
+                    startBGM('intro');
+                    animId = requestAnimationFrame(gameLoop);
+                    window.addEventListener('keydown', (e) => {
+                        if (e.code === 'Space' || e.code === 'ArrowUp') handleKeyboardFlap();
+                    });
+                    // Note: removed global click listener to avoid double-flapping with button
+                });
+
+                onUnmounted(() => {
+                    cancelAnimationFrame(animId);
+                    clearInterval(bgmInterval);
+                    clearInterval(choiceInterval);
+                });
+
+                return {
+                    gameCanvasRef, screenState, gameState, config,
+                    countdownVal, notifications, gameOverMsg, winMsg, winTimer,
+                    themeOverrides: { common: { primaryColor: '#006aab' } },
+                    isPlaying, nextPointReq, canProceed, choiceTimer, isButtonActive,
+                    handleFlap, startGame, retryRound, nextRound, dropToSL, resetFullGame,
+                    confirmDowngrade, denyDowngrade, confirmRestore, denyRestore, restartCurrentRound
+                };
+            }
+        };
+
+        createApp(App).use(naive).mount('#app');
+    </script>
+</body>
+
+</html>
